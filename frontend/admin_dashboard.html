@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Dashboard – Bullying Detection System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <script src="config.js"></script>
+  <script src="utils.js" defer></script>
+</head>
+
+<body class="bg-admin">
+  <div class="page-shell">
+
+    <!-- NAVBAR -->
+    <header class="navbar">
+      <div class="navbar-brand">
+        <div class="logo-badge">BD</div>
+        <div class="navbar-title">Admin Dashboard</div>
+      </div>
+      <nav class="nav-links">
+        <button class="btn-nav" onclick="logout()">Logout</button>
+      </nav>
+    </header>
+
+    <div class="sections-wrapper">
+
+      <!-- ADMIN INSTRUCTIONS -->
+      <div class="section-card">
+        <h2 class="section-title">Admin Instructions</h2>
+        <p class="section-subtitle">
+          You are responsible for first-line review. Please follow these rules:
+        </p>
+
+        <div class="section-steps">
+          <div class="step-card">✔ Treat every report seriously — even without evidence.</div>
+          <div class="step-card">✔ Mark status truthfully — avoid vague or misleading statuses.</div>
+          <div class="step-card">✔ Use “Need More Info” responsibly to avoid delays.</div>
+          <div class="step-card">✔ Escalate to Validators only when required.</div>
+          <div class="step-card">✔ Your actions are permanently stored on the blockchain.</div>
+        </div>
+      </div>
+
+      <!-- REPORT LIST -->
+      <div class="section-card">
+        <h2 class="section-title">All Submitted Reports</h2>
+
+        <!-- Tabs -->
+        <div class="tab-nav">
+          <button class="tab-btn active" onclick="switchTab('new')">New Reports</button>
+          <button class="tab-btn" onclick="switchTab('under-review')">Under Review</button>
+          <button class="tab-btn" onclick="switchTab('escalated')">Escalated</button>
+          <button class="tab-btn" onclick="switchTab('more-info')">Need More Info</button>
+          <button class="tab-btn" onclick="switchTab('resolved')">Resolved</button>
+        </div>
+
+        <!-- Tab Contents -->
+        <div id="tab-new" class="tab-content active"></div>
+        <div id="tab-under-review" class="tab-content"></div>
+        <div id="tab-escalated" class="tab-content"></div>
+        <div id="tab-more-info" class="tab-content"></div>
+        <div id="tab-resolved" class="tab-content"></div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    function logout() {
+      localStorage.clear();
+      window.location.href = "index.html";
+    }
+
+    function switchTab(tabName) {
+      // Update buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+
+      // Update content
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+    }
+
+    async function loadReports() {
+      const role = localStorage.getItem("user_role");
+      if (role !== "Admin") {
+        showToast("Unauthorized.", "error");
+        setTimeout(() => window.location.href = "login.html", 1500);
+        return;
+      }
+
+      try {
+        const res = await fetchWithAuth(`${API_BASE_URL}/get_reports?role=Admin&user_id=admin`);
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+        const reports = await res.json();
+
+        // Clear all tabs
+        ['new', 'under-review', 'escalated', 'more-info', 'resolved'].forEach(id => {
+          document.getElementById(`tab-${id}`).innerHTML = "";
+        });
+
+        let hasReports = false;
+
+        for (const reportId in reports) {
+          hasReports = true;
+          const timeline = reports[reportId];
+          const created = timeline.find(b => b.action_type === "Created");
+
+          // Determine current status based on the latest action that is a status change
+          // We look for the last action that is NOT just a comment, or we can just look at the last block?
+          // Actually, the status is usually the last action's type, but we need to map it.
+          // Let's find the latest status update.
+
+          // Sort timeline by timestamp just in case, though usually appended in order
+          timeline.sort((a, b) => a.timestamp - b.timestamp);
+
+          let currentStatus = "New";
+          // Iterate to find the latest relevant status
+          for (const block of timeline) {
+            if (["Under Review", "Resolved", "Escalated to Validator", "Need More Info"].includes(block.action_type)) {
+              currentStatus = block.action_type;
+            }
+          }
+
+          // Map status to tab ID
+          let tabId = "tab-new";
+          if (currentStatus === "Under Review") tabId = "tab-under-review";
+          else if (currentStatus === "Escalated to Validator") tabId = "tab-escalated";
+          else if (currentStatus === "Need More Info") tabId = "tab-more-info";
+          else if (currentStatus === "Resolved") tabId = "tab-resolved";
+
+          const container = document.getElementById(tabId);
+
+          const cardHtml = `
+        <div class="section-card" style="border-left:5px solid #2563eb; margin-bottom: 20px;">
+          <h3 class="section-title">Report ID: ${reportId}</h3>
+          <p><strong>Description:</strong> ${created.data.description}</p>
+          <p><strong>Reporter:</strong> ${created.data.reporter_email}</p>
+          <p><strong>Witness Statement:</strong> ${created.data.witness || 'N/A'}</p>
+          <p><strong>AI Analysis (Text):</strong> ${created.data.ai_text || 'N/A'}</p>
+          <p><strong>AI Analysis (Image):</strong> ${created.data.ai_image || 'N/A'}</p>
+          ${created.data.evidence ? `<p><strong>Evidence:</strong> <a href="${API_BASE_URL}/uploads/${created.data.evidence}" target="_blank" class="btn-link">View Evidence</a></p>` : ""}
+
+          <div class="hero-actions" style="margin-top:10px;">
+            <button class="btn-primary" onclick="updateStatus('${reportId}', 'Under Review')">Under Review</button>
+            <button class="btn-outline" onclick="updateStatus('${reportId}', 'Need More Info')">Need More Info</button>
+            <button class="btn-outline" onclick="updateStatus('${reportId}', 'Resolved')">Resolve</button>
+            <button class="btn-outline" onclick="updateStatus('${reportId}', 'Escalated to Validator')">Escalate</button>
+          </div>
+
+          <textarea id="comment-${reportId}" placeholder="Add a comment" style="margin-top:10px;"></textarea>
+          <button class="btn-primary" style="margin-top:10px;" onclick="addComment('${reportId}')">Submit Comment</button>
+
+          <div class="timeline" style="margin-top:12px;">
+            ${timeline.map(b => `
+              <div class="timeline-item">
+                <p><strong>${b.action_type}</strong> – ${new Date(b.timestamp * 1000).toLocaleString()}</p>
+                ${b.data?.remarks ? `<p>Remarks: ${b.data.remarks}</p>` : ""}
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+          container.innerHTML += cardHtml;
+        }
+
+        // Show empty messages if needed
+        ['new', 'under-review', 'escalated', 'more-info', 'resolved'].forEach(id => {
+          const el = document.getElementById(`tab-${id}`);
+          if (el.innerHTML === "") {
+            el.innerHTML = "<p style='color:var(--text-muted); font-style:italic;'>No reports in this category.</p>";
+          }
+        });
+
+      } catch (err) {
+        console.error("Error loading reports:", err);
+        // Show error in the active tab or a general area? 
+        // Let's just alert for now or put in the first tab
+        document.getElementById("tab-new").innerHTML = `<p style="color:red">Error loading reports: ${err.message}</p>`;
+      }
+    }
+
+    async function updateStatus(id, status) {
+      await fetchWithAuth(`${API_BASE_URL}/update_report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          report_id: id,
+          action_type: status,
+          actor: "Admin",
+          remarks: ""
+        })
+      });
+      showToast(`Report ${id} updated to ${status}`);
+      loadReports(); // Reload to move to new tab
+    }
+
+    async function addComment(id) {
+      const comment = document.getElementById(`comment-${id}`).value;
+      if (!comment) return showToast("Enter a comment first.", "error");
+
+      await fetchWithAuth(`${API_BASE_URL}/update_report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          report_id: id,
+          action_type: "Commented",
+          actor: "Admin",
+          remarks: comment
+        })
+      });
+      showToast("Comment added");
+      loadReports();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadReports();
+    });
+  </script>
+
+</body>
+
+</html>

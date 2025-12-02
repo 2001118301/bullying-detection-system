@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Register – Bullying Detection System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <script src="utils.js" defer></script>
+</head>
+
+<body class="bg-auth">
+  <div class="page-shell">
+
+    <!-- NAVBAR -->
+    <header class="navbar">
+      <div class="navbar-brand">
+        <div class="logo-badge">BD</div>
+        <div class="navbar-title">Bullying Detection System</div>
+      </div>
+      <nav class="nav-links">
+        <a class="nav-link" href="index.html">Home</a>
+        <button class="btn-nav" onclick="window.location.href='login.html'">Login</button>
+      </nav>
+    </header>
+
+    <div class="auth-wrapper">
+      <div class="card">
+        <h2 class="card-title">Create Your Account</h2>
+        <p class="card-subtitle">Only approved roles can be created</p>
+
+        <form id="registerForm">
+
+          <div class="form-group">
+            <label>Email (Your School Email)</label>
+            <input type="email" id="email" required>
+          </div>
+
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="password" required>
+          </div>
+
+          <div class="form-group">
+            <label>Role</label>
+            <select id="role">
+              <option value="Reporter">Reporter (Student)</option>
+              <option value="Admin">Admin (School Staff)</option>
+              <option value="Validator">Validator (Independent Unit)</option>
+            </select>
+          </div>
+
+          <button class="btn-primary btn-full" type="submit">Register</button>
+        </form>
+
+        <p class="text-center" style="margin-top: 12px;">
+          Already have an account?
+          <a class="text-link" href="login.html">Login here</a>
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    document.getElementById("registerForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      const role = document.getElementById("role").value;
+
+      const res = await fetch("http://localhost:5000/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: email,
+          password,
+          device_hash: getDeviceId(),
+          role
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showToast(data.error, "error");
+        return;
+      }
+
+      showToast("Account created successfully!", "success");
+      setTimeout(() => window.location.href = "login.html", 1500);
+    });
+  </script>
+</body>
+
+</html>

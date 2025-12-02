@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Login – Bullying Detection System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <script src="config.js"></script>
+  <script src="utils.js" defer></script>
+</head>
+
+<body class="bg-auth">
+  <div class="page-shell">
+
+    <!-- NAVBAR -->
+    <header class="navbar">
+      <div class="navbar-brand">
+        <div class="logo-badge">BD</div>
+        <div class="navbar-title">Bullying Detection System</div>
+      </div>
+      <nav class="nav-links">
+        <a class="nav-link" href="index.html">Home</a>
+        <a class="nav-link" href="register.html">Register</a>
+      </nav>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <div class="auth-wrapper">
+      <div class="card">
+        <h2 class="card-title text-center">Welcome Back</h2>
+        <p class="card-subtitle text-center">Login to access your dashboard</p>
+
+        <form id="loginForm">
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="email" required placeholder="user@example.com">
+          </div>
+
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="password" required placeholder="••••••••">
+          </div>
+
+          <button type="submit" class="btn-primary btn-full">Login</button>
+        </form>
+
+        <div class="text-center" style="margin-top: 15px;">
+          <a href="register.html" class="text-link">Don't have an account? Register</a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: email,
+            password: password,
+            device_hash: getDeviceId()
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          showToast(data.error, "error");
+          return;
+        }
+
+        // Store JWT and user info
+        setAuthToken(data.token);
+        localStorage.setItem("user_role", data.role);
+        localStorage.setItem("user_id", data.user_id); // Keep for display if needed
+
+        showToast("Login successful! Redirecting...", "success");
+
+        setTimeout(() => {
+          if (data.role === "Reporter") window.location.href = "reporter_dashboard.html";
+          else if (data.role === "Admin") window.location.href = "admin_dashboard.html";
+          else if (data.role === "Validator") window.location.href = "validator_dashboard.html";
+          else showToast("Unknown role", "error");
+        }, 1000);
+
+      } catch (err) {
+        showToast("Error connecting to server", "error");
+        console.error(err);
+      }
+    });
+  </script>
+
+</body>
+
+</html>

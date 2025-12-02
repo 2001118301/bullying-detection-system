@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Your Reports – Bullying Detection System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <script src="config.js"></script>
+  <script src="utils.js" defer></script>
+</head>
+
+<body class="bg-reporter">
+  <div class="page-shell">
+
+    <!-- NAVBAR -->
+    <header class="navbar">
+      <div class="navbar-brand">
+        <div class="logo-badge">BD</div>
+        <div class="navbar-title">Bullying Detection System</div>
+      </div>
+      <nav class="nav-links">
+        <a class="nav-link" href="reporter_dashboard.html">Submit Report</a>
+        <button class="btn-nav" onclick="logout()">Logout</button>
+      </nav>
+    </header>
+
+    <div class="sections-wrapper">
+
+      <div class="section-card">
+        <div class="section-header">
+          <h2 class="section-title">Your Report History</h2>
+          <p class="section-subtitle">Below are all the reports you have submitted.</p>
+        </div>
+
+        <div id="reportList"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    function logout() {
+      localStorage.clear();
+      window.location.href = "index.html";
+    }
+
+    async function loadReports() {
+      const email = localStorage.getItem("user_id");
+      const role = localStorage.getItem("user_role");
+
+      if (!email || role !== "Reporter") {
+        alert("Unauthorized. Please log in.");
+        window.location.href = "login.html";
+        return;
+      }
+
+      try {
+        const res = await fetchWithAuth(`${API_BASE_URL}/get_reports?role=Reporter&user_id=${email}`);
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+        const reports = await res.json();
+
+        const container = document.getElementById("reportList");
+        container.innerHTML = "";
+
+        if (!reports.length) {
+          container.innerHTML = "<p>No reports submitted yet.</p>";
+          return;
+        }
+
+        reports.forEach((timeline) => {
+          const reportId = timeline[0].report_id;
+
+          let html = `
+            <div class="section-card" style="border-left: 5px solid #22c55e;">
+              <h3 class="section-title">Report ID: ${reportId}</h3>
+              ${(() => {
+              const created = timeline.find(b => b.action_type === "Created");
+              if (created) {
+                return `
+                        <p><strong>Student ID:</strong> ${created.data.student_id || 'N/A'}</p>
+                        <p><strong>Description:</strong> ${created.data.description}</p>
+                        <p><strong>Witness Statement:</strong> ${created.data.witness || 'None'}</p>
+                        <p><strong>Date Submitted:</strong> ${created.data.date_submitted || 'N/A'}</p>
+                        <p><strong>AI Analysis (Text):</strong> ${created.data.ai_text || 'N/A'}</p>
+                        <p><strong>AI Analysis (Image):</strong> ${created.data.ai_image || 'N/A'}</p>
+                        <hr style="margin: 10px 0; border: 0; border-top: 1px solid #eee;">
+                    `;
+              }
+              return "";
+            })()}
+              <div class="timeline">
+          `;
+
+          timeline.forEach(block => {
+            html += `
+              <div class="timeline-item">
+                <p><strong>${block.action_type}</strong> – ${new Date(block.timestamp * 1000).toLocaleString()}</p>
+                ${block.data?.remarks ? `<p>Remarks: ${block.data.remarks}</p>` : ""}
+              </div>
+            `;
+          });
+
+          html += `</div></div>`;
+          container.innerHTML += html;
+        });
+      } catch (err) {
+        console.error("Error loading reports:", err);
+        document.getElementById("reportList").innerHTML = `<p style="color:red">Error loading reports: ${err.message}</p>`;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadReports();
+    });
+  </script>
+
+</body>
+
+</html>

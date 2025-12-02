@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Submit Report – Bullying Detection System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <script src="config.js"></script>
+  <script src="utils.js" defer></script>
+</head>
+
+<body class="bg-reporter">
+  <div class="page-shell">
+
+    <!-- NAVBAR -->
+    <header class="navbar">
+      <div class="navbar-brand">
+        <div class="logo-badge">BD</div>
+        <div class="navbar-title">Bullying Detection System</div>
+      </div>
+
+      <nav class="nav-links">
+        <a class="nav-link" href="report_status.html">View Status</a>
+        <button class="btn-nav" onclick="logout()">Logout</button>
+      </nav>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <div class="auth-wrapper">
+      <div class="card">
+
+        <h2 class="card-title">Submit a Bullying Report</h2>
+        <p class="card-subtitle">Your report will remain confidential and tamper-proof.</p>
+
+
+
+        <!-- 🔵 REPORT FORM -->
+        <form id="reportForm" enctype="multipart/form-data">
+
+          <div class="form-group">
+            <label>Student ID</label>
+            <input type="text" id="student_id" required placeholder="Enter your Student ID">
+          </div>
+
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="description" required placeholder="Describe what happened..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Witness Statement (Optional)</label>
+            <textarea id="witness" placeholder="Any witnesses?"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Evidence (Required - Photo or Video)</label>
+            <input type="file" id="evidence" accept="image/*,video/*" required>
+          </div>
+
+          <div class="form-group">
+            <label>Date of Submission</label>
+            <input type="date" id="date" readonly>
+          </div>
+
+          <button type="submit" class="btn-primary btn-full">
+            Submit Report
+          </button>
+        </form>
+
+        <!-- 🔵 STATUS BUTTON (Moved) -->
+        <button class="btn-outline btn-full" style="margin-top: 15px;"
+          onclick="window.location.href='report_status.html'">
+          View My Report Status
+        </button>
+
+        <!-- 🔵 SUCCESS MESSAGE AFTER SUBMIT -->
+        <div id="successMessage" style="
+             display:none;
+             margin-top:20px;
+             padding:15px;
+             border-radius:12px;
+             background:#dcfce7;
+             color:#065f46;
+             text-align:center;
+             font-size:0.95rem;">
+          ✅ <strong>Your report has been successfully submitted.</strong><br><br>
+          You can now check the progress of your case below:
+          <br><br>
+          <button class="btn-primary btn-full" onclick="window.location.href='report_status.html'">
+            View Report Status
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    /* 🔐 Logout function */
+    function logout() {
+      clearAuthToken();
+      window.location.href = "index.html";
+    }
+
+    // Set today's date
+    document.addEventListener('DOMContentLoaded', () => {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('date').value = today;
+    });
+
+    /* 📝 Submit Report Handler */
+    document.getElementById("reportForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      if (!isLoggedIn()) {
+        showToast("Please log in first.", "error");
+        setTimeout(() => window.location.href = "login.html", 1500);
+        return;
+      }
+
+      const studentId = document.getElementById("student_id").value;
+      const description = document.getElementById("description").value;
+      const witness = document.getElementById("witness").value;
+      const evidence = document.getElementById("evidence").files[0];
+      const date = document.getElementById("date").value;
+
+      const form = new FormData();
+      // reporter_email is now inferred from token in backend
+      form.append("student_id", studentId);
+      form.append("description", description);
+      form.append("witness", witness);
+      form.append("date", date);
+      if (evidence) form.append("evidence", evidence);
+
+      try {
+        const res = await fetchWithAuth(`${API_BASE_URL}/submit_report`, {
+          method: "POST",
+          body: form
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          showToast(data.error || "Submission failed", "error");
+          return;
+        }
+
+        console.log("Report submitted:", data.report_id);
+
+        // Hide the form after submission
+        document.getElementById("reportForm").style.display = "none";
+
+        // Show success block
+        document.getElementById("successMessage").style.display = "block";
+        showToast("Report submitted successfully!", "success");
+
+      } catch (err) {
+        showToast("Error submitting report. Backend may be offline.", "error");
+        console.error(err);
+      }
+    });
+  </script>
+
+</body>
+
+</html>

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Validator Dashboard – Bullying Detection System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <script src="config.js"></script>
+  <script src="utils.js" defer></script>
+</head>
+
+<body class="bg-validator">
+  <div class="page-shell">
+
+    <!-- NAVBAR -->
+    <header class="navbar">
+      <div class="navbar-brand">
+        <div class="logo-badge">BD</div>
+        <div class="navbar-title">Validator Dashboard</div>
+      </div>
+      <nav class="nav-links">
+        <button class="btn-nav" onclick="logout()">Logout</button>
+      </nav>
+    </header>
+
+    <div class="sections-wrapper">
+
+      <!-- VALIDATOR INSTRUCTIONS -->
+      <div class="section-card">
+        <h2 class="section-title">Validator Guidelines</h2>
+        <p class="section-subtitle">Your role is to ensure fairness and transparency.</p>
+
+        <div class="section-steps">
+          <div class="step-card">✔ You only see escalated reports.</div>
+          <div class="step-card">✔ Confirm admin actions follow policy.</div>
+          <div class="step-card">✔ Add neutral final remarks.</div>
+          <div class="step-card">✔ Mark reports as Validated, Rejected, or Needs Further Action.</div>
+          <div class="step-card">✔ Your validation is permanent and recorded on blockchain.</div>
+        </div>
+      </div>
+
+      <!-- FILTER CONTROLS -->
+      <div class="section-card" style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
+        <span style="font-weight: 600; font-size: 0.95rem;">Filter View:</span>
+        <button class="btn-primary" id="btnShowAll" onclick="filterReports('all')">Show All Reports</button>
+        <button class="btn-outline" id="btnShowEscalated" onclick="filterReports('escalated')">Show Escalated
+          Only</button>
+      </div>
+
+      <!-- REPORT LIST -->
+      <div class="section-card">
+        <h2 class="section-title">All Reports (Oversight & Validation)</h2>
+        <div id="validatorReports"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    let allReportsData = {}; // Store reports globally for filtering
+
+    function logout() {
+      localStorage.clear();
+      window.location.href = "index.html";
+    }
+
+    async function loadReports() {
+      const role = localStorage.getItem("user_role");
+      if (role !== "Validator") {
+        showToast("Unauthorized.", "error");
+        setTimeout(() => window.location.href = "login.html", 1500);
+        return;
+      }
+
+      try {
+        const res = await fetchWithAuth(`${API_BASE_URL}/get_reports?role=Validator&user_id=validator&t=${new Date().getTime()}`);
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+        allReportsData = await res.json();
+        renderReports('all'); // Default view
+
+      } catch (err) {
+        console.error("Error loading reports:", err);
+        document.getElementById("validatorReports").innerHTML = `<p style="color:red">Error loading reports: ${err.message}</p>`;
+      }
+    }
+
+    function filterReports(mode) {
+      // Update button styles
+      if (mode === 'all') {
+        document.getElementById('btnShowAll').className = 'btn-primary';
+        document.getElementById('btnShowEscalated').className = 'btn-outline';
+      } else {
+        document.getElementById('btnShowAll').className = 'btn-outline';
+        document.getElementById('btnShowEscalated').className = 'btn-primary';
+      }
+      renderReports(mode);
+    }
+
+    function renderReports(mode) {
+      const container = document.getElementById("validatorReports");
+      container.innerHTML = "";
+
+      let reportsToRender = [];
+
+      // Convert dict to array for sorting/filtering
+      for (const reportId in allReportsData) {
+        const timeline = allReportsData[reportId];
+        const isEscalated = timeline.some(b => b.action_type === "Escalated to Validator");
+
+        if (mode === 'escalated' && !isEscalated) continue;
+
+        reportsToRender.push({ reportId, timeline, isEscalated });
+      }
+
+      if (reportsToRender.length === 0) {
+        container.innerHTML = "<p>No reports found for this filter.</p>";
+        return;
+      }
+
+      reportsToRender.forEach(({ reportId, timeline, isEscalated }) => {
+        const created = timeline.find(b => b.action_type === "Created");
+        if (!created) {
+          console.warn(`Report ${reportId} missing 'Created' block. Skipping.`);
+          return;
+        }
+
+        container.innerHTML += `
+          <div class="section-card" style="border-left:5px solid ${isEscalated ? '#facc15' : '#cbd5e1'}; margin-bottom:15px; position:relative;">
+            ${isEscalated ? `<span style="position:absolute; top:15px; right:20px; background:#fef08a; color:#854d0e; padding:4px 8px; border-radius:6px; font-size:0.75rem; font-weight:bold; border:1px solid #fde047;">⚠️ Escalated</span>` : ""}
+            
+            <h3 class="section-title">Report ID: ${reportId}</h3>
+            <p><strong>Description:</strong> ${created.data.description || 'No description'}</p>
+            <p><strong>Reporter:</strong> ${created.data.reporter_email || 'Unknown'}</p>
+            <p><strong>Witness Statement:</strong> ${created.data.witness || 'N/A'}</p>
+            <p><strong>AI Analysis (Text):</strong> ${created.data.ai_text || 'N/A'}</p>
+            <p><strong>AI Analysis (Image):</strong> ${created.data.ai_image || 'N/A'}</p>
+            ${created.data.evidence ? `<p><strong>Evidence:</strong> <a href="${API_BASE_URL}/uploads/${created.data.evidence}" target="_blank" class="btn-link">View Evidence</a></p>` : ""}
+
+            <div class="hero-actions" style="margin-top:12px;">
+              <button class="btn-primary" onclick="updateStatus('${reportId}','Validated')">Validate</button>
+              <button class="btn-outline" onclick="updateStatus('${reportId}','Rejected')">Reject</button>
+              <button class="btn-outline" onclick="updateStatus('${reportId}','Needs More Evidence')">Request More Evidence</button>
+            </div>
+
+            <textarea id="note-${reportId}" placeholder="Add final validator note" style="margin-top:10px;"></textarea>
+            <button class="btn-primary" style="margin-top:10px;" onclick="addNote('${reportId}')">Submit Note</button>
+
+            <div class="timeline" style="margin-top:12px;">
+              ${timeline.map(b => `
+                <div class="timeline-item">
+                  <p><strong>${b.action_type}</strong> – ${new Date(b.timestamp * 1000).toLocaleString()}</p>
+                  ${b.data?.remarks ? `<p>Remarks: ${b.data.remarks}</p>` : ""}
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    async function updateStatus(id, status) {
+      await fetchWithAuth(`${API_BASE_URL}/update_report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          report_id: id,
+          action_type: status,
+          actor: "Validator",
+          remarks: ""
+        })
+      });
+      showToast(`Report ${id} marked as ${status}`);
+      loadReports();
+    }
+
+    async function addNote(id) {
+      const note = document.getElementById(`note-${id}`).value;
+      if (!note) return showToast("Enter a note first.", "error");
+
+      await fetchWithAuth(`${API_BASE_URL}/update_report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          report_id: id,
+          action_type: "Validator Note",
+          actor: "Validator",
+          remarks: note
+        })
+      });
+
+      showToast("Validator note submitted");
+      loadReports();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadReports();
+    });
+  </script>
+
+</body>
+
+</html>
