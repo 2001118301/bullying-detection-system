@@ -1,8 +1,12 @@
 # backend/app.py
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from blockchain_module import Blockchain
-from ai_module import analyze_text, analyze_image
+try:
+    from backend.blockchain_module import Blockchain
+    from backend.ai_module import analyze_text, analyze_image
+except ImportError:
+    from blockchain_module import Blockchain
+    from ai_module import analyze_text, analyze_image
 import hashlib
 import os
 import uuid
